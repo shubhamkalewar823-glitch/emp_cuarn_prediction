@@ -4,9 +4,13 @@ import numpy as np
 
 app = Flask(__name__)
 
-# Load the trained Naive Bayes model with its proper filename
-with open('naive_bayes_model.pkl', 'rb') as f:
-    model = pickle.load(f)
+# Load the trained Naive Bayes model safely
+try:
+    with open('naive_bayes_model.pkl', 'rb') as f:
+        model = pickle.load(f)
+except Exception as e:
+    print(f"Error loading model: {e}")
+    model = None
 
 @app.route('/')
 def home():
@@ -14,22 +18,25 @@ def home():
 
 @app.route('/predict', methods=['POST'])
 def predict():
+    if model is None:
+        return render_template('index.html', prediction_text="Error: Model could not be loaded on the server.")
+    
     try:
-        # Extract features in the exact order expected by the model[cite: 1]
-        education = float(request.form['Education'])
-        joining_year = float(request.form['JoiningYear'])
-        city = float(request.form['City'])
-        payment_tier = float(request.form['PaymentTier'])
-        age = float(request.form['Age'])
-        gender = float(request.form['Gender'])
-        ever_benched = float(request.form['EverBenched'])
-        experience = float(request.form['ExperienceInCurrentDomain'])
+        # Extract features safely with error checking
+        form_keys = [
+            'Education', 'JoiningYear', 'City', 'PaymentTier', 
+            'Age', 'Gender', 'EverBenched', 'ExperienceInCurrentDomain'
+        ]
         
-        # Combine into array
-        final_features = np.array([[
-            education, joining_year, city, payment_tier, 
-            age, gender, ever_benched, experience
-        ]])
+        float_features = []
+        for key in form_keys:
+            val = request.form.get(key)
+            if val is None or val.strip() == '':
+                raise ValueError(f"Missing value for field: {key}")
+            float_features.append(float(val))
+        
+        # Reshape into a 2D array for the model
+        final_features = np.array([float_features])
         
         # Make prediction
         prediction = model.predict(final_features)
@@ -39,7 +46,8 @@ def predict():
         return render_template('index.html', prediction_text=result_msg)
         
     except Exception as e:
-        return render_template('index.html', prediction_text=f'Error in processing: {str(e)}')
+        # This will catch input mismatch or conversion errors and display them cleanly
+        return render_template('index.html', prediction_text=f'Processing Error: {str(e)}')
 
 if __name__ == '__main__':
     app.run(debug=True)
