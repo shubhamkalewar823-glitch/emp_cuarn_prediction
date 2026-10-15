@@ -4,7 +4,7 @@ import numpy as np
 
 app = Flask(__name__)
 
-# Load the trained Naive Bayes model safely
+# Load model safely
 try:
     with open('naive_bayes_model.pkl', 'rb') as f:
         model = pickle.load(f)
@@ -19,10 +19,10 @@ def home():
 @app.route('/predict', methods=['POST'])
 def predict():
     if model is None:
-        return render_template('index.html', prediction_text="Error: Model could not be loaded on the server.")
+        return render_template('index.html', prediction_text="Error: Model file could not be loaded on the server.")
     
     try:
-        # Extract features safely with error checking
+        # Extract features in the correct order for your dataset
         form_keys = [
             'Education', 'JoiningYear', 'City', 'PaymentTier', 
             'Age', 'Gender', 'EverBenched', 'ExperienceInCurrentDomain'
@@ -32,21 +32,23 @@ def predict():
         for key in form_keys:
             val = request.form.get(key)
             if val is None or val.strip() == '':
-                raise ValueError(f"Missing value for field: {key}")
+                raise ValueError(f"Missing value for required field: {key}")
             float_features.append(float(val))
         
-        # Reshape into a 2D array for the model
+        # Reshape to 2D array for scikit-learn
         final_features = np.array([float_features])
         
-        # Make prediction
+        # Predict
         prediction = model.predict(final_features)
-        output = prediction[0]
+        output = int(prediction[0])
         
-        result_msg = f"Prediction Result: {output} (1 = Likely to Leave, 0 = Likely to Stay)"
+        # Descriptive output for employee churn
+        status = "Likely to Leave (Churn)" if output == 1 else "Likely to Stay"
+        result_msg = f"Prediction Result: {status} (Class Code: {output})"
+        
         return render_template('index.html', prediction_text=result_msg)
         
     except Exception as e:
-        # This will catch input mismatch or conversion errors and display them cleanly
         return render_template('index.html', prediction_text=f'Processing Error: {str(e)}')
 
 if __name__ == '__main__':
